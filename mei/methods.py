@@ -18,7 +18,7 @@ def get_input_dimensions(dataloaders, get_dims, data_key=None):
         return list(dataloaders_dimensions[0].values())[0]
     else:
         dimensions_dict = get_dims(dataloaders["train"])[data_key]
-        in_key = "inputs" if "inputs" in dimensions_dict else "images"
+        in_key = "videos" if "videos" in dimensions_dict else "images"
         return dimensions_dict[in_key]
 
 
@@ -99,6 +99,7 @@ def gradient_ascent(
             "n_meis",
             "mei_shape",
             "model_forward_kwargs",
+            "frames_maximize",
             "transparency",
             "transparency_weight",
             "inhibitory",
@@ -126,8 +127,15 @@ def gradient_ascent(
     shape = config.get("mei_shape", get_input_dimensions(dataloaders, get_dims, data_key=data_key))
 
     create_initial_guess = import_func(config["initial"]["path"], config["initial"]["kwargs"])
-    initial_guess = create_initial_guess(n_meis, *shape[1:]).to(config["device"])  # (1*1*h*w)
+    initial_guess = create_initial_guess(n_meis, *shape[1:]).to(config["device"])  # (1*1*h*w) or (1*1*300*h*w)
+    # yqiu TODO
+    # for the initial_guess, how to only update the video channels and to fix the behavior channels
+    # how to add pupil_center and behavior for prediction # the fake value should be the mean value xxx
+    # where does the code constrain the norm of input
+    # how to set the time window of activation to be maximized
+    # what do objectives do? -> This defines what the tracker tracks (every n iterations)
 
+    frames_maximize = config.get("frames_maximize", 1)
     transparency = config.get("transparency", None)
     if transparency:
         initial_alpha = (torch.ones(n_meis, 1, *shape[2:]) * 0.5).to(config["device"])
@@ -148,11 +156,12 @@ def gradient_ascent(
         model,
         initial=initial_guess,
         optimizer=optimizer,
+        frames_maximize=frames_maximize,
         transparency=transparency,
         inhibitory=inhibitory,
         transparency_weight=transparency_weight,
         **optional
     )
 
-    final_evaluation, mei = optimize_func(mei, stopper, tracker)
+    final_evaluation, mei = optimize_func(mei, stopper, tracker) # yqiu TODO
     return mei, final_evaluation, tracker.log

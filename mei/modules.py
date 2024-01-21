@@ -87,11 +87,11 @@ class ConstrainedOutputModel(Module):
         Returns:
             A tensor representing the constrained output of the model.
         """
-        output = self.model(x, *args, **self.forward_kwargs, **kwargs)
+        output = self.model(x, *args, **self.forward_kwargs, **kwargs) # yqiu TODO
         return (
             self.target_fn(output)
             if self.constraint is None or len(self.constraint) == 0
-            else self.target_fn(output[:, self.constraint])
+            else self.target_fn(output[..., self.constraint]) # output[:, self.constraint]
         )
 
     def __repr__(self):

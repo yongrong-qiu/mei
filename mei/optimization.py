@@ -59,6 +59,7 @@ class MEI:
         optimizer: Optimizer,
         transparency,#: False, then normal MEI without transparencytransform: Callable[[Tensor, int], Tensor] = default_transform,
         inhibitory,  # for ring or surround MEI: if False, then excitatory
+        frames_maximize: int = 1, # number of frames of neuronal activation to be maximized
         transparency_weight: float = 0.0,
         transform: Callable[[Tensor, int], Tensor] = default_transform,
         regularization: Callable[[Tensor, int], Tensor] = default_regularization,
@@ -88,6 +89,7 @@ class MEI:
         self.initial = initial.clone()
         self.optimizer = optimizer
         self.transform = transform
+        self.frames_maximize = frames_maximize
         self.transparency = transparency
         self.transparency_weight = transparency_weight
         self.regularization = regularization
@@ -104,7 +106,11 @@ class MEI:
     @property
     def _transformed_input(self) -> Tensor:
         if self._transformed is None:
+            # print (f'self._current_input.tensor.shape: {self._current_input.tensor.shape}')
+            # print (f'self._current_input.tensor: {self._current_input.tensor}')
             self._transformed = self.transform(self._current_input.tensor, self.i_iteration)
+            # print (f'self._current_input.tensor.shape: {self._current_input.tensor.shape}')
+            # print (f'self._current_input.tensor: {self._current_input.tensor}')
         return self._transformed
 
     def transparentize(self) -> Tensor:
@@ -118,18 +124,35 @@ class MEI:
         return torch.mean( self._current_input.tensor[:,-1,...])
 
     def evaluate(self) -> Tensor:
-        """Evaluates the function on the current MEI."""
-        if self.transparency:
-            return self.func(self.transparentize().float())
-        else:
-            return self.func(self._transformed_input)
+        # yqiu TODO
+        # input = self._current_input.tensor # self.transparentize().float() if self.transparency else self._transformed_input
+        # behavior = torch.zeros((input.shape[0], 2, input.shape[2])).to(input.device) if self.func.model.members[0].modulator else None
+        
+        input = self.transparentize().float() if self.transparency else self._transformed_input
+        # behavior = torch.zeros((input.shape[0], 2, input.shape[2])).to(input.device)
+        pupil_center = torch.zeros((input.shape[0], 2, input.shape[2])).to(input.device) if self.func.model.members[0].shifter else None
+        
+        # print (f'input.shape: {input.shape}, input[0,0,:10,0,0]: {input[0,0,:10,0,0]}')
+        # print (f'behavior.shape: {behavior.shape}, behavior[0,0,:10]: {behavior[0,0,:10]}')
+        # print (f'pupil_center.shape: {pupil_center.shape}, pupil_center[0,0,:10]: {pupil_center[0,0,:10]}')
+        # input = torch.zeros((1,3,50,36,64)).to("cuda:0")
+        # behavior = torch.zeros((1,2,50)).to("cuda:0")
+        # pupil_center = torch.zeros((1,2,50)).to("cuda:0")
+        
+        # output = self.func(input, pupil_center=pupil_center, behavior=behavior)[-1]
+        # print (f'output: {output}')
+        # assert False, "test"
+        # return self.func(input, pupil_center=pupil_center, behavior=behavior)[0,-1] # shape: (1,depth) # [-3:].sum()
+        return self.func(input, pupil_center=pupil_center)[0,-self.frames_maximize:].sum() 
+        # return output
+
 
     def step(self) -> State:
         """Performs an optimization step."""
         state = dict(i_iter=self.i_iteration, input_=self._current_input.cloned_data)
         self.optimizer.zero_grad()        
         evaluation = self.evaluate() * (self.inhibitory!=True) + self.evaluate()*(self.inhibitory==True)*(-1)
-        #print('eval 1 ',evaluation.item())
+        # print('eval 1 ',evaluation.item())
         state["evaluation"] = evaluation.item()
 
         state["transformed_input"] = self._transformed_input.data.cpu().clone() ### may need to change
@@ -151,7 +174,12 @@ class MEI:
         self._current_input.grad = self.precondition(self._current_input.grad, self.i_iteration)
         # update gradient use transparency gradient
         state["preconditioned_grad"] = self._current_input.cloned_grad
-        self.optimizer.step() # current_input already changed here??
+
+        # yqiu TODO: Test this
+        # self._current_input.grad["dimension of behavior"] = 0
+        self._current_input.grad[:, 1:, ...] = 0
+
+        self.optimizer.step() # This is where the MEI is changed
 
         # post process new mei after optimization
         self._current_input.data = self.postprocessing(self._current_input.data, self.i_iteration)

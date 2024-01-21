@@ -469,9 +469,30 @@ class ChangeNorm:
 
     @varargin
     def __call__(self, x, iteration=None):
+        # yqiu TODO
         x_norm = torch.norm(x.view(len(x), -1), dim=-1)
         renorm = x * (self.norm / x_norm).view(len(x), *[1] * (x.dim() - 1))
         return renorm
+    
+
+class ChangeNormInChannel:
+    """Change the norm of the input.
+
+    Arguments:
+        norm (float or tensor): Desired norm. If tensor, it should be the same length as
+            x.
+    """
+
+    def __init__(self, channel, norm):
+
+        self.channel = channel
+        self.norm = norm
+
+    @varargin
+    def __call__(self, x, iteration=None):
+        x_norm = torch.norm(x[:, self.channel, ...])
+        x[:, self.channel, ...] = x[:, self.channel, ...] * (self.norm / x_norm)
+        return x
 
 
 class ClipRange:
