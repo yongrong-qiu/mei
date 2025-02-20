@@ -26,7 +26,7 @@ def gradient_ascent(
     model: Module,
     config: Dict,
     seed: int,
-    shape: tuple[int] = None,
+    shape: Tuple[int] = None,
     dataloaders: Dict = None,
     set_seed: Callable = torch.manual_seed,
     get_dims: Callable = get_dims_for_loader_dict,
