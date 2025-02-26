@@ -63,6 +63,7 @@ class MEI:
         transparency,  #: False, then normal MEI without transparencytransform: Callable[[Tensor, int], Tensor] = default_transform,
         inhibitory,  # for ring or surround MEI: if False, then excitatory
         transparency_weight: float = 0.0,
+        zero_grad_channels: Tuple = None, # if zero_grad_channels=(1,2,3), then the gradient of these three channels are zeros.
         transform: Callable[[Tensor, int], Tensor] = default_transform,
         regularization: Callable[[Tensor, int], Tensor] = default_regularization,
         precondition: Callable[[Tensor, int], Tensor] = default_precondition,
@@ -93,6 +94,7 @@ class MEI:
         self.transform = transform
         self.transparency = transparency
         self.transparency_weight = transparency_weight
+        self.zero_grad_channels = zero_grad_channels
         self.regularization = regularization
         self.precondition = precondition
         self.postprocessing = postprocessing
@@ -156,6 +158,8 @@ class MEI:
         self._current_input.grad = self.precondition(self._current_input.grad, self.i_iteration)
         # update gradient use transparency gradient
         state["preconditioned_grad"] = self._current_input.cloned_grad
+        if self.zero_grad_channels:
+            self._current_input.grad[:, self.zero_grad_channels, ...] = 0 
         self.optimizer.step()  # current_input already changed here??
 
         # post process new mei after optimization

@@ -111,6 +111,7 @@ def gradient_ascent(
             "transparency",
             "transparency_weight",
             "inhibitory",
+            "zero_grad_channels",
         ):
             continue
         if "kwargs" not in component_config:
@@ -141,6 +142,7 @@ def gradient_ascent(
         initial_guess = torch.cat((initial_guess, initial_alpha), dim=1)
     transparency_weight = config.get("transparency_weight", 1.0)
     inhibitory = config.get("inhibitory", None)
+    zero_grad_channels = config.get("zero_grad_channels", None)
 
     optimizer = import_func(config["optimizer"]["path"], dict(params=[initial_guess], **config["optimizer"]["kwargs"]))
     stopper = import_func(config["stopper"]["path"], config["stopper"]["kwargs"])
@@ -157,6 +159,7 @@ def gradient_ascent(
         transparency=transparency,
         inhibitory=inhibitory,
         transparency_weight=transparency_weight,
+        zero_grad_channels=zero_grad_channels,
         **optional
     )
 
