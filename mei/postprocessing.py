@@ -111,7 +111,8 @@ class StdConstraint:
 
 class StdConstraintAndClipInChannel:
     """
-    Enforces a std constraint and pixel value clipping on a given image tensor.
+    Enforces a std constraint and pixel value clipping on a given image tensor for one specific channel, 
+    as the input img could include behavior channels.
 
     Refer to PNormConstraintAndClip().
     """
