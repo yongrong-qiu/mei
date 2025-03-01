@@ -87,3 +87,54 @@ class PNormConstraintAndClip:
         normalized_img = torch.where(normalized_img < min_pixel_value, min_pixel_value, normalized_img)
 
         return normalized_img
+
+
+class StdConstraint:
+    """
+    Enforces a std constraint on a given image tensor.
+
+    Refer to PNormConstraint().
+
+    """
+
+    def __init__(self, std_value: float):
+        self.max_value = std_value
+
+    def __call__(self, img: torch.Tensor, iteration):
+        std_value = torch.std(img)
+        if std_value > self.max_value:
+            normalized_img = img * (self.max_value / (std_value + 1e-12))
+        else:
+            normalized_img = img
+        return normalized_img
+    
+
+class StdConstraintAndClipInChannel:
+    """
+    Enforces a std constraint and pixel value clipping on a given image tensor.
+
+    Refer to PNormConstraintAndClip().
+    """
+
+    def __init__(
+        self,
+        std_value: float = 30.0,
+        max_pixel_value: float = 1.0,
+        min_pixel_value: float = -1.0,
+        channel: int = 0,
+    ):
+        self.max_value = std_value
+        self.max_pixel_value = float(max_pixel_value)
+        self.min_pixel_value = float(min_pixel_value)
+        self.std_constraint = StdConstraint(std_value)
+        self.channel = channel
+
+    def __call__(self, img: torch.Tensor, iteration=None):
+        normalized_img = self.std_constraint(img[:, self.channel, ...], iteration)
+        max_pixel_value = torch.tensor(self.max_pixel_value, dtype=normalized_img.dtype, device=normalized_img.device)
+        min_pixel_value = torch.tensor(self.min_pixel_value, dtype=normalized_img.dtype, device=normalized_img.device)
+        normalized_img = torch.where(normalized_img > max_pixel_value, max_pixel_value, normalized_img)
+        normalized_img = torch.where(normalized_img < min_pixel_value, min_pixel_value, normalized_img)
+        img[:, self.channel, ...] = normalized_img
+
+        return img
