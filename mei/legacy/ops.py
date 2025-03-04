@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from neuralpredictors.regularizers import LaplaceL2
 from nnfabrik import builder
 from scipy import signal
+from statsmodels.stats import weightstats as wt
 
 from .utils import varargin
 
@@ -839,3 +840,62 @@ class ChangeStd:
         rescaled_x = fixed_std + (x_mean - x_mean_rescaled).view(len(x), *[1] * (x.dim() - 1))
 
         return fixed_std if self.zero_mean else rescaled_x
+
+
+class ChangeSurroundStd():
+    """ Change contrast in center and surround respectively.
+    Adapted from https://github.com/yongrong-qiu/featurevis-copyJiakun/blob/5bff58bce792780a83fdf2b0ad540cb2335dd5c9/featurevis/ops.py#L513
+    
+    Arguments:
+        mei (torch tensor): precomputed mei, shape: (1, N, height, width), could include stimulus channel and behavior channels in the second axis
+        mask (np array): Soft MEI mask.
+        std (tuple) : center and surround std in standard units.
+    """
+
+    def __init__(self, mei, mask, std, stimulus_channel=0):
+        device = mei.device
+        self.stimulus_channel=stimulus_channel
+        self.mei = mei[:,self.stimulus_channel,:,:].detach().clone().to(device).requires_grad_(False) # torch.tensor(mei).type(torch.FloatTensor).cuda()
+        self.mask = torch.tensor(mask).type(torch.FloatTensor).to(device)  # .cuda()
+        # self.center_std = wt.DescrStatsW(mei.flatten(), mask.flatten()).std
+        self.center_std = np.std(self.mei.detach().cpu().numpy() * mask)  # full-field std after masking
+        self.sur_mask = 1 - torch.tensor(mask).type(torch.FloatTensor).to(device)  # .cuda()
+        self.std = np.array([float(std[0]), float(std[1])])  # 0 if unconstrained
+
+    @varargin
+    def __call__(self, x, iteration=None):
+        with torch.no_grad():
+            sur_std = wt.DescrStatsW(x.detach().cpu().numpy()[:,self.stimulus_channel,:,:].flatten(), self.sur_mask.detach().cpu().numpy().flatten()).std
+            std = self.std.copy()
+            if self.std[0] == 0:
+                std[0] = self.center_std
+            if self.std[1] == 0:
+                std[1] = sur_std
+        center = self.mei * self.mask
+        x = x.clone()
+        x[:,self.stimulus_channel,:,:] = center * std[0] / self.center_std + x[:,self.stimulus_channel,:,:] * self.sur_mask * std[1] / sur_std
+        return x
+    
+    # def __init__(self, mei, mask, std, stimulus_channel=0):
+    #     self.stimulus_channel=stimulus_channel
+    #     self.mei = torch.tensor(mei[:,self.stimulus_channel,:,:]).type(torch.FloatTensor)
+    #     self.mask = torch.tensor(mask).type(torch.FloatTensor)
+    #     # self.center_std = wt.DescrStatsW(mei.flatten(), mask.flatten()).std
+    #     self.center_std = np.std(self.mei.detach().cpu().numpy() * mask)  # full-field std after masking
+    #     self.sur_mask = 1 - torch.tensor(mask).type(torch.FloatTensor) # .cuda()
+    #     self.std = np.array([float(std[0]), float(std[1])])  # 0 if unconstrained
+
+    # @varargin
+    # def __call__(self, x, iteration=None):
+    #     device = x.device
+    #     with torch.no_grad():
+    #         sur_std = wt.DescrStatsW(x.detach().cpu().numpy()[:,self.stimulus_channel,:,:].flatten(), self.sur_mask.detach().cpu().numpy().flatten()).std
+    #         std = self.std.copy()
+    #         if self.std[0] == 0:
+    #             std[0] = self.center_std
+    #         if self.std[1] == 0:
+    #             std[1] = sur_std
+    #     center = self.mei * self.mask
+    #     center = center.to(device).requires_grad_(False)
+    #     x[:,self.stimulus_channel,:,:] = center * std[0] / self.center_std + x[:,self.stimulus_channel,:,:] * self.sur_mask * std[1] / sur_std
+    #     return x
