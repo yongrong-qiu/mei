@@ -9,6 +9,8 @@ from neuralpredictors.regularizers import LaplaceL2
 from nnfabrik import builder
 from scipy import signal
 from statsmodels.stats import weightstats as wt
+from skimage import morphology
+from scipy import ndimage
 
 from .utils import varargin
 
@@ -879,3 +881,55 @@ class ChangeSurroundStd():
         # x[:,self.stimulus_channel,:,:] = center * std[0] / self.center_std + x[:,self.stimulus_channel,:,:] * self.sur_mask * std[1] / sur_std
         x[:,self.stimulus_channel,:,:] = center + x[:,self.stimulus_channel,:,:] * self.sur_mask
         return x
+
+
+class MEIMask():
+    """ # finds a mask for an MEI by thresholding the absolute intensity
+    Adapted from https://github.com/yongrong-qiu/staticnet_mei/blob/4376f815fc296f65b81cc9f2da3dd820b1e77101/static_analyses/modulation_base.py#L1123
+
+    Arguments:
+    mei: 2D numpy array with a shape of (height, width)
+
+    Return
+    mei_mask:           longblob # produced mask
+    mask_x:             float    # (px) centroid of the mask in x; (0, 0) is center of image    
+    mask_y:             float    # (px) centroid of the mask in y; (0, 0) is center of image
+    mask_mean:          float    # mean of MEI inside the mask   
+    mask_std:           float    # standard deviation of MEI inside the mask
+    """
+    
+    def __init__(
+        self,
+        zscore_thresh: float = 1.5,
+        closing_iters: int = 1,
+        gaussian_sigma: float = 1.0,
+    ):
+        self.zscore_thresh=zscore_thresh
+        self.closing_iters=closing_iters
+        self.gaussian_sigma=gaussian_sigma
+
+    def __call__(self, mei):
+        # Normalize and threshold
+        norm_mei = (mei - mei.mean()) / mei.std()
+        thresholded = np.abs(norm_mei) > self.zscore_thresh
+        # Remove small holes in the thresholded image and connect any stranding pixels
+        closed = ndimage.binary_closing(thresholded, iterations=self.closing_iters)
+        # Remove any remaining small objects
+        labeled = morphology.label(closed, connectivity=2)
+        most_frequent = np.argmax(np.bincount(labeled.ravel())[1:]) + 1
+        oneobject = labeled == most_frequent
+        # Create convex hull just to close any remaining holes and so it doesn't look weird
+        hull = morphology.convex_hull_image(oneobject)
+        # Smooth edges
+        smoothed = ndimage.gaussian_filter(hull.astype(np.float32),sigma=self.gaussian_sigma)
+        mask = smoothed  # final mask
+        # Compute mask centroid
+        px_y, px_x = (coords.mean() + 0.5 for coords in np.nonzero(hull))
+        mask_y, mask_x = px_y - mask.shape[0] / 2, px_x - mask.shape[1] / 2
+        # Compute MEI std inside the mask
+        mei_mean = (mei * mask).sum() / mask.sum()
+        mei_std = np.sqrt((((mei - mei_mean) ** 2) * mask).sum() / mask.sum())
+        # # Insert
+        # self.insert1({**key, 'mei_mask': mask, 'mask_x': mask_x, 'mask_y': mask_y,
+        #               'mask_mean': mei_mean, 'mask_std': mei_std}, ignore_extra_fields=1)
+        return (mask, mask_x, mask_y, mei_mean, mei_std)
