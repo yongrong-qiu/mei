@@ -873,7 +873,8 @@ class ChangeSurroundStd():
                 std[1] = sur_std
         center = self.mei * self.mask
         x = x.clone()
-        x[:,self.stimulus_channel,:,:] = center * std[0] / self.center_std + x[:,self.stimulus_channel,:,:] * self.sur_mask * std[1] / sur_std
+        # x[:,self.stimulus_channel,:,:] = center * std[0] / self.center_std + x[:,self.stimulus_channel,:,:] * self.sur_mask * std[1] / sur_std
+        x[:,self.stimulus_channel,:,:] = center + x[:,self.stimulus_channel,:,:] * self.sur_mask * std[1] / sur_std
         return x
     
     # def __init__(self, mei, mask, std, stimulus_channel=0):
