@@ -131,6 +131,11 @@ class MEI:
         input = self.transparentize().float() if self.transparency else self._transformed_input
         # behavior = torch.zeros((input.shape[0], 2, input.shape[2])).to(input.device)
         pupil_center = torch.zeros((input.shape[0], 2, input.shape[2])).to(input.device) if self.func.model.members[0].shifter else None
+
+        if 'pupil_center' in self.func.forward_kwargs and self.func.forward_kwargs['pupil_center'] is not None:
+            output = self.func(input)
+        else:
+            output = self.func(input, pupil_center=pupil_center)
         
         # print (f'input.shape: {input.shape}, input[0,0,:10,0,0]: {input[0,0,:10,0,0]}')
         # print (f'behavior.shape: {behavior.shape}, behavior[0,0,:10]: {behavior[0,0,:10]}')
@@ -143,7 +148,7 @@ class MEI:
         # print (f'output: {output}')
         # assert False, "test"
         # return self.func(input, pupil_center=pupil_center, behavior=behavior)[0,-1] # shape: (1,depth) # [-3:].sum()
-        return self.func(input, pupil_center=pupil_center)[0,-self.frames_maximize:].sum() 
+        return output[0,-self.frames_maximize:].sum() 
         # return output
 
 
