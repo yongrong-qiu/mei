@@ -796,9 +796,9 @@ class GaussianBlur:
 
         # Define 1-d kernels to use for blurring
         y_halfsize = max(int(round(sigma[0] * self.truncate)), 1)
-        y_gaussian = signal.gaussian(2 * y_halfsize + 1, std=sigma[0])
+        y_gaussian = signal.windows.gaussian(2 * y_halfsize + 1, std=sigma[0])
         x_halfsize = max(int(round(sigma[1] * self.truncate)), 1)
-        x_gaussian = signal.gaussian(2 * x_halfsize + 1, std=sigma[1])
+        x_gaussian = signal.windows.gaussian(2 * x_halfsize + 1, std=sigma[1])
         y_gaussian = torch.as_tensor(y_gaussian, device=x.device, dtype=x.dtype)
         x_gaussian = torch.as_tensor(x_gaussian, device=x.device, dtype=x.dtype)
 
